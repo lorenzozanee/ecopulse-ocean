@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地球动态报告 — Earth Dynamic Report</title>
+<style>
+  :root {
+    --bg: #060b10;
+    --surface: #0d1520;
+    --border: #1a2a3a;
+    --accent: #00d4ff;
+    --accent2: #00a8cc;
+    --warn: #ff9100;
+    --danger: #ff3d71;
+    --text: #8899aa;
+    --text-bright: #ccdde8;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Noto Sans SC', monospace;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* ---- Full-viewport Globe Background ---- */
+  #globe-bg {
+    position: fixed; top:0; left:0; z-index:0;
+    width: 100vw; height: 100vh;
+  }
+
+  /* ---- Overlay Layout ---- */
+  #app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 310px 1fr 300px;
+    grid-template-rows: 52px 1fr auto;
+    gap: 10px;
+    padding: 10px;
+    height: 100vh;
+    pointer-events: none;
+  }
+  #app > * { pointer-events: auto; }
+
+  header {
+    grid-column: 1/-1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px;
+    background: rgba(13,21,32,0.85);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    backdrop-filter: blur(12px);
+  }
+  header h1 {
+    font-size: 1rem; font-weight: 700; letter-spacing: 0.08em;
+    background: linear-gradient(90deg, #00d4ff, #00e676, #00d4ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header .live-badge {
+    font-size: 0.65rem; color: #4caf50;
+    display: flex; align-items: center; gap: 6px;
+  }
+  header .live-badge .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #4caf50; box-shadow: 0 0 8px #4caf50;
+    animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.6)} }
+
+  .panel {
+    background: rgba(13,21,32,0.82);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    backdrop-filter: blur(10px);
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .panel h3 {
+    font-size: 0.65rem; letter-spacing: 0.1em;
+    color: var(--accent2); margin-bottom: 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 5px;
+    text-transform: uppercase;
+  }
+
+  #left-panel  { grid-row: 2/4; }
+  #center-panel { grid-row: 2/4; min-height: 0; }
+  #right-panel { grid-row: 2/4; }
+
+  .region-btn {
+    display: block; width: 100%; padding: 7px 10px; margin-bottom: 3px;
+    background: transparent; border: 1px solid rgba(255,255,255,0.06); border-radius: 4px;
+    color: var(--text); font-family: inherit; font-size: 0.7rem; cursor: pointer;
+    transition: all 0.2s; text-align: left;
+  }
+  .region-btn:hover { border-color: rgba(0,212,255,0.4); color: var(--text-bright); background: rgba(0,212,255,0.04); }
+  .region-btn.active { border-color: var(--accent); background: rgba(0,212,255,0.1); color: var(--accent); box-shadow: 0 0 12px rgba(0,212,255,0.08); }
+
+  #map-container {
+    flex: 1;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    position: relative; overflow: hidden;
+    min-height: 280px;
+    background: #060d16;
+  }
+  #map-canvas { width: 100%; height: 100%; display: block; }
+
+  #metrics-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+  .metric-card {
+    background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px; padding: 10px 8px; text-align: center;
+    transition: border-color 0.3s;
+  }
+  .metric-card:hover { border-color: rgba(0,212,255,0.3); }
+  .metric-card .value {
+    font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em;
+    transition: color 0.5s;
+  }
+  .metric-card .label { font-size: 0.6rem; color: #556677; margin-top: 3px; letter-spacing: 0.06em; }
+  .metric-card .delta { font-size: 0.6rem; margin-top: 2px; }
+  .delta.up { color: var(--danger); }
+  .delta.down { color: #4caf50; }
+
+  .report-card {
+    background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 5px; padding: 8px 10px;
+  }
+  .report-card h4 { font-size: 0.68rem; color: var(--accent); margin-bottom: 4px; }
+  .report-card p { font-size: 0.64rem; line-height: 1.45; color: #778899; }
+  .grade { display: inline-block; padding: 1px 7px; border-radius: 3px; font-weight: 700; font-size: 0.72rem; }
+  .grade.A { background: rgba(76,175,80,0.2); color: #4caf50; }
+  .grade.B { background: rgba(255,193,7,0.2); color: #ffc107; }
+  .grade.C { background: rgba(255,145,0,0.2); color: var(--warn); }
+
+  #relay-log {
+    font-size: 0.6rem; color: #445566; max-height: 100px; overflow-y: auto;
+    margin-top: 4px;
+  }
+  #relay-log .line {
+    padding: 1.5px 0; border-bottom: 1px solid rgba(255,255,255,0.015);
+    transition: color 0.3s;
+  }
+  #relay-log .line:first-child { color: #667788; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+  @media (max-width: 1100px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto; }
+    #left-panel,#center-panel,#right-panel { grid-row: auto; }
+    #metrics-row { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="globe-bg"></canvas>
+
+<div id="app">
+  <header>
+    <h1>EARTH DYNAMIC REPORT / 地球动态报告</h1>
+    <span class="live-badge"><span class="dot"></span> LIVE — Copernicus · ARGO · VIIRS · Sentinel-3</span>
+  </header>
+
+  <div class="panel" id="left-panel">
+    <h3>观测海域</h3>
+    <button class="region-btn active" data-region="scs">南海 — 碳汇热点</button>
+    <button class="region-btn" data-region="na">北大西洋 — 深层水形成</button>
+    <button class="region-btn" data-region="so">南大洋 — 生物泵效率</button>
+    <button class="region-btn" data-region="ep">东太平洋 — 赤道涌升</button>
+    <button class="region-btn" data-region="io">北印度洋 — 季风碳通量</button>
+
+    <h3 style="margin-top:4px;">边缘传感器舰队</h3>
+    <div class="report-card">
+      <h4>ESP32-S3 #01 <span style="color:#4caf50">● 在线</span></h4>
+      <p>RLC信号: 0.42mV | SNR: <span id="snr1">17.3</span>dB<br>AI降噪增益: +14.2dB | 功耗: 12mW</p>
+    </div>
+    <div class="report-card">
+      <h4>ESP32-S3 #02 <span style="color:#ff9100">● 弱信号</span></h4>
+      <p>RLC信号: 0.08mV | SNR: <span id="snr2">8.1</span>dB<br>AI补偿增益: +14dB | 功耗: 8mW</p>
+    </div>
+    <div class="report-card">
+      <h4>RPi-Zero #03 <span style="color:#4caf50">● 在线</span></h4>
+      <p>pH: 8.12 | 溶解氧: <span id="do3">6.4</span>mg/L<br>浊度: 0.8 NTU | 功耗: 35mW</p>
+    </div>
+  </div>
+
+  <div class="panel" id="center-panel">
+    <h3 id="viewport-title">数字孪生视口 — 南海 · 碳汇热点</h3>
+    <div id="map-container">
+      <canvas id="map-canvas"></canvas>
+    </div>
+
+    <div id="metrics-row">
+      <div class="metric-card">
+        <div class="value" style="color:var(--accent)" id="metric-sst">28.4°C</div>
+        <div class="label">海表温度</div>
+        <div class="delta up">+0.3°C 距平</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color:#66bb6a" id="metric-chl">1.82</div>
+        <div class="label">叶绿素-a mg/m³</div>
+        <div class="delta down">−0.15 vs 周均值</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color:#ffb74d" id="metric-poc">4.7</div>
+        <div class="label">POC通量 gC/m²</div>
+        <div class="delta up">+0.6 gC/m²</div>
+      </div>
+      <div class="metric-card">
+        <div class="value" style="color:#ce93d8" id="metric-mld">42m</div>
+        <div class="label">混合层深度</div>
+        <div class="delta down">−8m 浅化</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="right-panel">
+    <h3>AI 地球健康评估</h3>
+    <div class="report-card">
+      <h4>碳汇效率 <span class="grade A">A</span></h4>
+      <p id="report-carbon">微生物碳泵效率 第82百分位。Martin曲线导出率 e=0.78，有机碳沉降通量优异。当前季节性的浮游植物水华正在增强碳封存。</p>
+    </div>
+    <div class="report-card">
+      <h4>海洋热浪风险 <span class="grade C">C</span></h4>
+      <p id="report-heat">SST距平 +0.9°C，接近MHW阈值。未来7天 34% 概率触发轻度热浪。建议持续监测珊瑚白化风险。</p>
+    </div>
+    <div class="report-card">
+      <h4>生物多样性代理 <span class="grade B">B</span></h4>
+      <p id="report-bio">叶绿素变异系数 0.31，中等浮游植物多样性。ARGO剖面显示温跃层梯度稳定，营养盐供给正常。</p>
+    </div>
+
+    <h3 style="margin-top:2px;">RLC 信号解释</h3>
+    <div class="report-card">
+      <p id="report-rlc">昼夜振荡模式检测到浊度峰值，频率 0.021mHz（半日潮周期）。AI降噪将本底噪声从 ±0.15mV 压缩至 ±0.03mV（增益+14dB），实现微生物呼吸速率推断。</p>
+    </div>
+
+    <div id="relay-log">
+      <h3>数据中继日志</h3>
+      <div id="relay-lines"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  GLOBE BACKGROUND — 3D wireframe earth with atmosphere
+// ============================================================
+const bgC = document.getElementById('globe-bg');
+const bgX = bgC.getContext('2d');
+let W, H;
+
+function resize() { W = bgC.width = window.innerWidth; H = bgC.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+// Pre-compute continent outline data (simplified lat/lon coords)
+// Each entry: [lon, lat] scaled to globe projection
+const continents = [];
+(function buildContinents() {
+  // Simplified coastline paths — coarse approximation for wireframe look
+  const paths = [
+    // North America rough outline
+    [[-130,55],[-125,48],[-122,42],[-118,34],[-105,30],[-97,28],[-90,30],[-82,35],[-75,40],[-67,44],[-60,47],[-55,50],[-60,55],[-70,60],[-80,62],[-90,60],[-105,58],[-120,58],[-130,55]],
+    // South America
+    [[-80,10],[-75,5],[-70,0],[-65,-5],[-60,-10],[-55,-20],[-50,-25],[-45,-20],[-40,-10],[-35,-5],[-40,0],[-50,5],[-60,8],[-70,10],[-80,10]],
+    // Europe
+    [[-10,36],[0,38],[5,44],[8,48],[12,46],[18,42],[22,40],[20,38],[15,36],[5,36],[-5,36],[-10,36]],
+    // Africa
+    [[-15,15],[-5,5],[5,0],[15,0],[25,0],[35,5],[40,10],[35,20],[30,30],[20,35],[10,37],[0,35],[-10,30],[-15,25],[-17,20],[-15,15]],
+    // Asia
+    [[40,35],[50,35],[60,35],[70,30],[80,25],[90,20],[100,15],[110,20],[120,25],[130,35],[140,40],[145,45],[140,50],[125,55],[110,55],[100,55],[90,55],[80,55],[70,55],[60,50],[50,42],[40,38],[40,35]],
+    // Australia
+    [[115,-20],[120,-15],[130,-12],[140,-15],[145,-20],[150,-25],[145,-35],[140,-38],[135,-35],[125,-30],[118,-25],[115,-20]],
+    // East Asia / China coast detail
+    [[105,20],[110,20],[115,22],[118,25],[120,28],[122,30],[122,32],[120,36],[118,38],[115,40],[110,38],[108,35],[107,30],[105,25],[105,20]],
+    // Japan
+    [[130,31],[132,34],[135,36],[138,37],[140,38],[142,41],[144,43],[145,42],[143,38],[140,35],[138,33],[135,31],[132,30],[130,31]],
+    // SE Asia / Indonesia
+    [[95,5],[100,3],[105,0],[110,-2],[115,-5],[120,-7],[125,-8],[130,-5],[127,0],[120,2],[110,3],[100,5],[95,5]],
+    // India
+    [[72,15],[75,20],[78,25],[80,28],[85,28],[88,25],[90,22],[88,15],[85,10],[80,8],[77,10],[74,12],[72,15]],
+    // Antarctica hint
+    [[-180,-68],[-120,-70],[-60,-68],[0,-70],[60,-68],[120,-70],[180,-68]],
+  ];
+  for (const path of paths) {
+    const projected = path.map(([lon, lat]) => {
+      const phi = (90 - lat) * Math.PI / 180;
+      const theta = (lon + 180) * Math.PI / 180;
+      return { phi, theta };
+    });
+    continents.push(projected);
+  }
+})();
+
+// Ocean current flow field (simplified vector field)
+const currents = [];
+for (let i = 0; i < 60; i++) {
+  currents.push({
+    lat: Math.random() * 160 - 80,
+    lon: Math.random() * 340 - 170,
+    phase: Math.random() * Math.PI * 2,
+    speed: Math.random() * 0.6 + 0.2,
+  });
+}
+
+let globeRot = 0;
+
+function project(lon, lat, cx, cy, r) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + globeRot) * Math.PI / 180;
+  const x = cx + r * Math.sin(phi) * Math.cos(theta);
+  const y = cy - r * Math.cos(phi);
+  const z = r * Math.sin(phi) * Math.sin(theta);
+  return { x, y, z };
+}
+
+function drawGlobe() {
+  bgX.clearRect(0, 0, W, H);
+
+  const cx = W * 0.72, cy = H * 0.42;
+  const r = Math.min(W, H) * 0.38;
+
+  // Deep space glow
+  const spaceGrad = bgX.createRadialGradient(cx, cy, r*0.7, cx, cy, r*2.2);
+  spaceGrad.addColorStop(0, 'rgba(0,30,60,0.15)');
+  spaceGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  bgX.fillStyle = spaceGrad;
+  bgX.beginPath(); bgX.arc(cx, cy, r*2.2, 0, Math.PI*2); bgX.fill();
+
+  // Atmosphere halo
+  const atmo = bgX.createRadialGradient(cx, cy, r*0.92, cx, cy, r*1.08);
+  atmo.addColorStop(0, 'rgba(0,180,240,0)');
+  atmo.addColorStop(0.5, 'rgba(0,180,240,0.06)');
+  atmo.addColorStop(1, 'rgba(0,180,240,0)');
+  bgX.fillStyle = atmo;
+  bgX.beginPath(); bgX.arc(cx, cy, r*1.08, 0, Math.PI*2); bgX.fill();
+
+  // Continents
+  bgX.strokeStyle = 'rgba(0,200,220,0.14)';
+  bgX.lineWidth = 0.6;
+  bgX.shadowColor = 'rgba(0,200,220,0.15)';
+  bgX.shadowBlur = 3;
+
+  for (const path of continents) {
+    bgX.beginPath();
+    let first = true;
+    for (const { phi, theta } of path) {
+      const x = cx + r * Math.sin(phi) * Math.cos(theta);
+      const y = cy - r * Math.cos(phi);
+      const z = r * Math.sin(phi) * Math.sin(theta);
+      if (z < -0.05) { first = true; continue; } // back-face cull
+      if (first) { bgX.moveTo(x, y); first = false; }
+      else bgX.lineTo(x, y);
+    }
+    bgX.stroke();
+  }
+  bgX.shadowBlur = 0;
+
+  // Ocean current streamlines
+  for (const c of currents) {
+    const p = project(c.lon, c.lat, cx, cy, r);
+    if (p.z < 0) continue;
+    const alpha = 0.08 + 0.06 * Math.sin(Date.now()/3000 + c.phase);
+    bgX.strokeStyle = `rgba(0,220,255,${alpha})`;
+    bgX.lineWidth = 0.4;
+    bgX.beginPath();
+    bgX.moveTo(p.x, p.y);
+    const nx = p.x + Math.cos(c.phase + Date.now()/5000) * c.speed * 15;
+    const ny = p.y + Math.sin(c.phase + Date.now()/5000) * c.speed * 15;
+    bgX.lineTo(nx, ny);
+    bgX.stroke();
+  }
+
+  // Grid lines
+  bgX.strokeStyle = 'rgba(0,180,210,0.035)';
+  bgX.lineWidth = 0.3;
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const phi = (90 - lat) * Math.PI / 180;
+    const yr = r * Math.sin(phi);
+    const y = cy - r * Math.cos(phi);
+    if (yr < 2) continue;
+    bgX.beginPath();
+    bgX.ellipse(cx, y, yr, yr * 0.25, 0, 0, Math.PI * 2);
+    bgX.stroke();
+  }
+  for (let lon = 0; lon < 360; lon += 30) {
+    const theta = (lon + globeRot) * Math.PI / 180;
+    const ex = r * Math.abs(Math.cos(theta));
+    bgX.beginPath();
+    bgX.ellipse(cx, cy, ex * 0.85, r, 0, 0, Math.PI * 2);
+    bgX.stroke();
+  }
+
+  // Orbital particles
+  const now = Date.now() / 1000;
+  for (let i = 0; i < 40; i++) {
+    const lat = 30 * Math.sin(i * 1.7 + now * 0.08);
+    const lon = i * 9 + now * 4;
+    const p = project(lon, lat, cx, cy, r);
+    if (p.z < 0) continue;
+    const alpha = 0.12 + 0.08 * Math.sin(i + now * 0.5);
+    bgX.fillStyle = `rgba(0,220,255,${alpha})`;
+    bgX.beginPath();
+    bgX.arc(p.x, p.y, 1.2, 0, Math.PI * 2);
+    bgX.fill();
+  }
+
+  globeRot += 0.06;
+  requestAnimationFrame(drawGlobe);
+}
+drawGlobe();
+
+// ============================================================
+//  MAP VIEWPORT — dynamic ocean color + carbon hotspot
+// ============================================================
+const mapC = document.getElementById('map-canvas');
+const mapX = mapC.getContext('2d');
+let simTime = 0, activeRegion = 'scs';
+
+function resizeMap() {
+  const box = document.getElementById('map-container');
+  mapC.width = box.clientWidth;
+  mapC.height = box.clientHeight;
+}
+resizeMap();
+window.addEventListener('resize', resizeMap);
+
+const hotspots = {
+  scs: { hx: 0.58, hy: 0.38, label: '南海碳汇', poc: 'POC: 4.7 gC/m²' },
+  na:  { hx: 0.32, hy: 0.28, label: '北大西洋深层', poc: 'POC: 3.8 gC/m²' },
+  so:  { hx: 0.50, hy: 0.72, label: '南大洋涌升', poc: 'POC: 5.2 gC/m²' },
+  ep:  { hx: 0.22, hy: 0.52, label: '赤道涌升', poc: 'POC: 3.1 gC/m²' },
+  io:  { hx: 0.62, hy: 0.46, label: '季风碳通量', poc: 'POC: 4.1 gC/m²' },
+};
+
+function drawMap() {
+  const w = mapC.width, h = mapC.height;
+  mapX.clearRect(0, 0, w, h);
+
+  // Dynamic ocean background
+  const imageData = mapX.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const nx = x / w * 5, ny = y / h * 3;
+
+      // Multi-octave noise for realistic ocean patterns
+      const sst = 24 + 8 * Math.sin(nx*2.7 + simTime*0.3) * Math.cos(ny*1.8 + simTime*0.25)
+                + 4 * Math.sin(nx*5.3 - simTime*0.5) * Math.cos(ny*4.1 + simTime*0.4)
+                + 2 * Math.sin(nx*11 + simTime*0.7) * Math.cos(ny*9 - simTime*0.6);
+      const chl = 0.2 + 2.5 * (0.5 + 0.5 * Math.sin(nx*1.9 + simTime*0.2 + 1.3)
+                * Math.cos(ny*3.3 - simTime*0.3))
+                + 0.8 * Math.sin(nx*6 + simTime*0.35) * Math.cos(ny*7 - simTime*0.45);
+
+      const t = (sst - 24) / 8;
+      const rr = Math.max(0, Math.min(255, (t > 0.2 ? t * 50 : 0) + chl * 35));
+      const gg = Math.max(0, Math.min(255, 15 + chl * 38 + Math.abs(t) * 18));
+      const bb = Math.max(0, Math.min(255, 60 + (1 - Math.abs(t)) * 45 + (1 - chl/2.5) * 55));
+      imageData.data[i] = rr;
+      imageData.data[i+1] = gg;
+      imageData.data[i+2] = bb;
+      imageData.data[i+3] = 210;
+    }
+  }
+  mapX.putImageData(imageData, 0, 0);
+
+  // Grid overlay
+  mapX.strokeStyle = 'rgba(0,200,230,0.05)';
+  mapX.lineWidth = 0.5;
+  for (let i = 1; i < 12; i++) { mapX.beginPath(); mapX.moveTo(w*(i/12), 0); mapX.lineTo(w*(i/12), h); mapX.stroke(); }
+  for (let i = 1; i < 7; i++)  { mapX.beginPath(); mapX.moveTo(0, h*(i/7)); mapX.lineTo(w, h*(i/7)); mapX.stroke(); }
+
+  // Carbon hotspot glow
+  const hs = hotspots[activeRegion];
+  const hx = w * hs.hx, hy = h * hs.hy;
+  const hr = 35 + 10 * Math.sin(simTime * 0.7);
+
+  // Outer glow
+  const glow1 = mapX.createRadialGradient(hx, hy, hr*0.5, hx, hy, hr*3);
+  glow1.addColorStop(0, 'rgba(255,140,0,0.22)');
+  glow1.addColorStop(0.5, 'rgba(255,100,0,0.06)');
+  glow1.addColorStop(1, 'rgba(0,0,0,0)');
+  mapX.fillStyle = glow1;
+  mapX.beginPath(); mapX.arc(hx, hy, hr*3, 0, Math.PI*2); mapX.fill();
+
+  // Inner hot core
+  const glow2 = mapX.createRadialGradient(hx, hy, 0, hx, hy, hr);
+  glow2.addColorStop(0, 'rgba(255,200,60,0.35)');
+  glow2.addColorStop(1, 'rgba(255,100,0,0)');
+  mapX.fillStyle = glow2;
+  mapX.beginPath(); mapX.arc(hx, hy, hr, 0, Math.PI*2); mapX.fill();
+
+  // Hotspot label
+  mapX.fillStyle = '#ffaa00';
+  mapX.font = 'bold 11px "SF Mono","Noto Sans SC",monospace';
+  mapX.shadowColor = 'rgba(255,140,0,0.5)';
+  mapX.shadowBlur = 6;
+  mapX.fillText(hs.label, hx - 28, hy - 42);
+  mapX.fillText(hs.poc, hx - 30, hy - 24);
+  mapX.shadowBlur = 0;
+
+  // ARGO float markers with pulse
+  const floatPositions = [
+    [0.30,0.45],[0.44,0.30],[0.68,0.50],[0.52,0.66],[0.28,0.64],[0.60,0.38],[0.38,0.55]
+  ];
+  for (const [fx, fy] of floatPositions) {
+    const pulse = 1 + 0.35 * Math.sin(simTime * 3.5 + fx * 10 + fy * 7);
+    mapX.fillStyle = 'rgba(0,220,255,0.75)';
+    mapX.beginPath(); mapX.arc(w*fx, h*fy, 3*pulse, 0, Math.PI*2); mapX.fill();
+    mapX.strokeStyle = 'rgba(0,220,255,0.25)';
+    mapX.lineWidth = 1;
+    mapX.beginPath(); mapX.arc(w*fx, h*fy, 7*pulse, 0, Math.PI*2); mapX.stroke();
+  }
+
+  // Edge device marker
+  const ex = w * 0.52, ey = h * 0.62;
+  const epulse = 1 + 0.4 * Math.sin(simTime * 4);
+  mapX.strokeStyle = 'rgba(76,175,80,0.5)';
+  mapX.lineWidth = 1.2;
+  mapX.beginPath(); mapX.arc(ex, ey, 10*epulse, 0, Math.PI*2); mapX.stroke();
+  mapX.fillStyle = '#4caf50';
+  mapX.beginPath(); mapX.arc(ex, ey, 3.5, 0, Math.PI*2); mapX.fill();
+  mapX.fillStyle = '#889999';
+  mapX.font = '9px monospace';
+  mapX.fillText('ESP32#01', ex + 10, ey + 3);
+
+  simTime += 0.018;
+  requestAnimationFrame(drawMap);
+}
+drawMap();
+
+// ============================================================
+//  LIVE METRICS
+// ============================================================
+function updateMetrics() {
+  const t = Date.now() / 1000;
+  document.getElementById('metric-sst').textContent = (28.4 + 0.2*Math.sin(t*0.12) + 0.06*Math.sin(t*0.41)).toFixed(1) + '°C';
+  document.getElementById('metric-chl').textContent = (1.82 + 0.1*Math.sin(t*0.15+1) + 0.04*Math.sin(t*0.38)).toFixed(2);
+  document.getElementById('metric-poc').textContent = (4.7 + 0.25*Math.sin(t*0.1+2) + 0.1*Math.sin(t*0.33)).toFixed(1);
+  document.getElementById('metric-mld').textContent = Math.round(42 + 5*Math.sin(t*0.09+0.5) + 2.5*Math.sin(t*0.27)) + 'm';
+  document.getElementById('snr1').textContent = (17.3 + 0.5*Math.sin(t*0.2)).toFixed(1);
+  document.getElementById('snr2').textContent = (8.1 + 0.3*Math.sin(t*0.25+1)).toFixed(1);
+  document.getElementById('do3').textContent = (6.4 + 0.2*Math.sin(t*0.18)).toFixed(1);
+}
+setInterval(updateMetrics, 2000);
+
+// ============================================================
+//  RELAY LOG
+// ============================================================
+const relayLines = document.getElementById('relay-lines');
+const sources = ['Copernicus-GLO','ARGO-4902713','PISCES','VIIRS-SNPP','Sentinel-3A','ESP32#01','ESP32#02','RPi#03'];
+const msgs = [
+  'SST L4 融合产品已更新 14N-22N/110E-120E',
+  'ARGO 剖面到达: 0-2000m T/S/DO',
+  'Martin曲线重拟合: e=0.78 R²=0.94',
+  'Chl-a Level-3 日拼接完成',
+  'OLCI L2 处理完成',
+  'RLC信号去噪: 增益+14.2dB',
+  '心跳: 功耗 11.3mW 电池 87%',
+  'pH传感器校准完成',
+];
+
+function addLine() {
+  const src = sources[Math.floor(Math.random()*sources.length)];
+  const msg = msgs[Math.floor(Math.random()*msgs.length)];
+  const ts = new Date().toISOString().substring(11,19);
+  const div = document.createElement('div');
+  div.className = 'line';
+  div.textContent = `[${ts}] ${src} — ${msg}`;
+  relayLines.prepend(div);
+  if (relayLines.children.length > 10) relayLines.lastChild.remove();
+}
+setInterval(addLine, 2800);
+for (let i = 0; i < 8; i++) addLine();
+
+// ============================================================
+//  REGION SWITCHING
+// ============================================================
+const regionNames = {
+  scs: '南海 · 碳汇热点',
+  na:  '北大西洋 · 深层水形成',
+  so:  '南大洋 · 生物泵效率',
+  ep:  '东太平洋 · 赤道涌升',
+  io:  '北印度洋 · 季风碳通量',
+};
+document.querySelectorAll('.region-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.region-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeRegion = btn.dataset.region;
+    document.getElementById('viewport-title').textContent = '数字孪生视口 — ' + regionNames[activeRegion];
+    simTime += 5;
+  });
+});
+</script>
+</body>
+</html>
