@@ -182,22 +182,64 @@ function init3D() {
     mk.userData = {lat,lon}; earthGroup.add(mk); markers.push(mk);
   }
 
-  // Interaction
+  // Interaction state
   let dragging = false, px = 0, py = 0;
-  renderer.domElement.addEventListener('pointerdown', e => { dragging = true; px = e.clientX; py = e.clientY; });
-  window.addEventListener('pointermove', e => {
+  let targetZoom = camera.position.z;
+  let lastTouchDist = 0;
+
+  // Mouse/touch drag → rotate
+  function onPointerDown(e) {
+    dragging = true; px = e.clientX; py = e.clientY;
+    renderer.domElement.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e) {
     if (!dragging) return;
     earthGroup.rotation.y += (e.clientX - px) * 0.005;
     earthGroup.rotation.x += (e.clientY - py) * 0.003;
-    earthGroup.rotation.x = Math.max(-0.5, Math.min(0.5, earthGroup.rotation.x));
+    earthGroup.rotation.x = Math.max(-0.6, Math.min(0.6, earthGroup.rotation.x));
     px = e.clientX; py = e.clientY;
-  });
-  window.addEventListener('pointerup', () => { dragging = false; });
-  renderer.domElement.addEventListener('wheel', e => {
+  }
+  function onPointerUp(e) { dragging = false; }
+
+  // Wheel → zoom (smooth lerp)
+  function onWheel(e) {
     e.preventDefault();
-    camera.position.z += e.deltaY * 0.002;
-    camera.position.z = Math.max(1.8, Math.min(5, camera.position.z));
-  }, { passive: false });
+    e.stopPropagation();
+    targetZoom += e.deltaY * 0.005;
+    targetZoom = Math.max(1.6, Math.min(6.0, targetZoom));
+  }
+
+  // Touch pinch → zoom
+  function onTouchStart(e) {
+    if (e.touches.length === 2) {
+      lastTouchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      dragging = false;
+    }
+  }
+  function onTouchMove(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = lastTouchDist - dist;
+      targetZoom += delta * 0.015;
+      targetZoom = Math.max(1.6, Math.min(6.0, targetZoom));
+      lastTouchDist = dist;
+    }
+  }
+
+  renderer.domElement.style.touchAction = 'none';
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+  renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+  renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
 
   window.addEventListener('resize', () => {
     const cw = container.clientWidth, ch = container.clientHeight;
@@ -210,6 +252,8 @@ function animate3D() {
   if (!isReady) return;
   requestAnimationFrame(animate3D);
   earthGroup.rotation.y += 0.0018; globeTime += 0.02;
+  // Smooth zoom lerp
+  camera.position.z += (targetZoom - camera.position.z) * 0.15;
   for (const m of markers) m.scale.setScalar(1 + 0.35 * Math.sin(globeTime * 4 + m.userData.lat));
   if (Math.floor(globeTime * 60) % 60 === 0) updateOverlay(globeTime, currentLayer);
   renderer.render(scene, camera);
