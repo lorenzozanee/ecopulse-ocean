@@ -64,11 +64,19 @@ def denoise_pipeline(
     measurement_var: float = 0.02,
 ) -> DenoisedSignal:
     filtered = kalman_denoise(signal, process_var, measurement_var)
-    snr_before = compute_snr(signal, filtered)
-    noise_est = np.array(signal) - np.array(filtered)
-    var_sig = float(np.var(np.array(filtered)))
-    var_noise = float(np.var(noise_est))
-    snr_after_val = float(10 * math.log10(var_sig / var_noise)) if var_noise > 1e-12 else float("inf")
+    sig_arr = np.array(signal)
+    filt_arr = np.array(filtered)
+
+    # Noise power before: estimated from high-frequency first-differences
+    diffs = np.diff(sig_arr)
+    noise_power_before = float(np.var(diffs) / 2)
+    # Residual noise power after filtering
+    noise_power_after = float(np.var(sig_arr - filt_arr))
+    signal_power = float(np.var(filt_arr))
+
+    eps = 1e-15
+    snr_before = float(10 * math.log10(signal_power / (noise_power_before + eps)))
+    snr_after_val = float(10 * math.log10(signal_power / (noise_power_after + eps)))
     gain_db = snr_after_val - snr_before
 
     return DenoisedSignal(

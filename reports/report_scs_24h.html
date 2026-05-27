@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地球动态报告 — 南海</title>
+<style>
+  :root {
+    --bg: #060b10; --surface: #0d1520; --border: #1a2a3a;
+    --accent: #00d4ff; --warn: #ff9100; --danger: #ff3d71;
+    --text: #8899aa; --text-bright: #ccdde8;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:monospace; padding:20px; }
+  h1 { color:var(--accent); font-size:1.2rem; margin-bottom:4px; }
+  .subtitle { color:#556677; font-size:0.7rem; margin-bottom:20px; }
+
+  .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:20px; }
+  .stat-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:14px;
+  }
+  .stat-card .value { font-size:1.4rem; font-weight:700; }
+  .stat-card .label { font-size:0.6rem; color:#556677; margin-top:4px; text-transform:uppercase; }
+  .stat-card .range { font-size:0.6rem; color:#445566; margin-top:2px; }
+
+  .chart { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:16px; margin-bottom:16px; }
+  .chart h3 { font-size:0.7rem; color:var(--accent); margin-bottom:10px; }
+
+  table { width:100%; border-collapse:collapse; font-size:0.68rem; }
+  th, td { padding:6px 10px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.04); }
+  th { color:var(--accent); font-weight:600; }
+  tr:hover td { background:rgba(255,255,255,0.02); }
+
+  .footer { font-size:0.6rem; color:#445566; margin-top:24px; text-align:center; }
+</style>
+</head>
+<body>
+<h1>地球动态报告 — 南海 (SCS)</h1>
+<div class="subtitle">
+  坐标: 5.0°–22.0°N, 110.0°–120.0°E |
+  时间跨度: 2026-05-27 (24 时间步长) |
+  生成时间: 2026-05-27 16:56:16
+</div>
+
+<div class="stats-grid">
+  
+  <div class="stat-card">
+    <div class="value" style="color:#00d4ff">30.9°C</div>
+    <div class="label">Average SST</div>
+    <div class="range">范围: 28.6–32.8</div>
+  </div>
+  
+  <div class="stat-card">
+    <div class="value" style="color:#66bb6a">3.117 mg/m³</div>
+    <div class="label">Average Chl-a</div>
+    <div class="range">范围: 2.633–3.547</div>
+  </div>
+  
+  <div class="stat-card">
+    <div class="value" style="color:#ffb74d">1.07 gC/m²</div>
+    <div class="label">Average POC Flux</div>
+    <div class="range">范围: 0.92–1.23</div>
+  </div>
+  
+  <div class="stat-card">
+    <div class="value" style="color:#ce93d8">62.0 m</div>
+    <div class="label">Average MLD</div>
+    <div class="range">范围: 38.8–81.3</div>
+  </div>
+  
+  <div class="stat-card">
+    <div class="value" style="color:#80cbc4">34.507 PSU</div>
+    <div class="label">Average Salinity</div>
+    <div class="range">范围: 34.261–34.715</div>
+  </div>
+  
+</div>
+
+<div class="chart">
+  <h3>观测时序数据 (前 12 行)</h3>
+  <table>
+    <thead>
+      <tr><th>时间</th><th>SST (°C)</th><th>Chl-a (mg/m³)</th><th>POC通量 (gC/m²)</th><th>MLD (m)</th><th>盐度 (PSU)</th></tr>
+    </thead>
+    <tbody>
+      
+      <tr>
+        <td>00:00:00</td>
+        <td>28.74</td>
+        <td>2.633</td>
+        <td>0.94</td>
+        <td>73.3</td>
+        <td>34.261</td>
+      </tr>
+      
+      <tr>
+        <td>01:00:00</td>
+        <td>28.64</td>
+        <td>2.981</td>
+        <td>0.99</td>
+        <td>77.5</td>
+        <td>34.538</td>
+      </tr>
+      
+      <tr>
+        <td>02:00:00</td>
+        <td>29.09</td>
+        <td>3.082</td>
+        <td>1.08</td>
+        <td>74.1</td>
+        <td>34.553</td>
+      </tr>
+      
+      <tr>
+        <td>03:00:00</td>
+        <td>29.07</td>
+        <td>3.37</td>
+        <td>1.16</td>
+        <td>74.8</td>
+        <td>34.435</td>
+      </tr>
+      
+      <tr>
+        <td>04:00:00</td>
+        <td>29.83</td>
+        <td>3.245</td>
+        <td>1.21</td>
+        <td>70.8</td>
+        <td>34.424</td>
+      </tr>
+      
+      <tr>
+        <td>05:00:00</td>
+        <td>30.55</td>
+        <td>3.033</td>
+        <td>1.01</td>
+        <td>62.7</td>
+        <td>34.546</td>
+      </tr>
+      
+      <tr>
+        <td>06:00:00</td>
+        <td>30.55</td>
+        <td>2.839</td>
+        <td>0.98</td>
+        <td>57.2</td>
+        <td>34.575</td>
+      </tr>
+      
+      <tr>
+        <td>07:00:00</td>
+        <td>31.3</td>
+        <td>2.991</td>
+        <td>1.06</td>
+        <td>51.1</td>
+        <td>34.462</td>
+      </tr>
+      
+      <tr>
+        <td>08:00:00</td>
+        <td>31.71</td>
+        <td>3.316</td>
+        <td>1.11</td>
+        <td>58.8</td>
+        <td>34.333</td>
+      </tr>
+      
+      <tr>
+        <td>09:00:00</td>
+        <td>32.4</td>
+        <td>3.344</td>
+        <td>1.19</td>
+        <td>53.7</td>
+        <td>34.463</td>
+      </tr>
+      
+      <tr>
+        <td>10:00:00</td>
+        <td>32.18</td>
+        <td>3.143</td>
+        <td>1.05</td>
+        <td>53.4</td>
+        <td>34.531</td>
+      </tr>
+      
+      <tr>
+        <td>11:00:00</td>
+        <td>32.84</td>
+        <td>3.184</td>
+        <td>1.09</td>
+        <td>49.0</td>
+        <td>34.459</td>
+      </tr>
+      
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  EcoPulse-Ocean / 蓝碳脉搏 — 地球动态报告 v0.1.0 | 数据源: 模拟引擎
+</div>
+</body>
+</html>
