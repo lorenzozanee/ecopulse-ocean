@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from jinja2 import Template
 
 from earthreport.config import OceanMetrics, RegionConfig
+
+if TYPE_CHECKING:
+    from earthreport.analyst.report import HealthReport
 
 DASHBOARD_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -64,6 +68,27 @@ DASHBOARD_TEMPLATE = """<!DOCTYPE html>
 </div>
 
 <div class="chart">
+  <h3>AI 地球健康评估</h3>
+  {% for section in report_sections %}
+  <div style="background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:5px; padding:10px; margin-bottom:8px;">
+    <h4 style="font-size:0.68rem; color:var(--accent); margin-bottom:4px;">
+      {{ section.title }}
+      {% if section.grade %}
+      <span style="display:inline-block; padding:1px 7px; border-radius:3px; font-weight:700; font-size:0.72rem;
+        {% if section.grade == 'A' %}background:rgba(76,175,80,0.2);color:#4caf50;
+        {% elif section.grade == 'B' %}background:rgba(255,193,7,0.2);color:#ffc107;
+        {% elif section.grade == 'C' %}background:rgba(255,145,0,0.2);color:#ff9100;
+        {% else %}background:rgba(255,61,113,0.2);color:#ff3d71;{% endif %}">
+        {{ section.grade }}
+      </span>
+      {% endif %}
+    </h4>
+    <p style="font-size:0.64rem; line-height:1.45; color:#778899;">{{ section.narrative }}</p>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="chart">
   <h3>观测时序数据 (前 12 行)</h3>
   <table>
     <thead>
@@ -96,6 +121,7 @@ def render_dashboard(
     region: RegionConfig,
     stats: dict[str, float],
     output_path: Path,
+    report: HealthReport | None = None,
     version: str = "0.1.0",
 ) -> Path:
     template = Template(DASHBOARD_TEMPLATE)
@@ -113,10 +139,13 @@ def render_dashboard(
          "label": "Average Salinity", "range": f"{stats['salinity_min']:.3f}–{stats['salinity_max']:.3f}"},
     ]
 
+    report_sections = report.to_dict()["sections"] if report else []
+
     html = template.render(
         region=region,
         metrics=metrics,
         stat_cards=stat_cards,
+        report_sections=report_sections,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         version=version,
     )
