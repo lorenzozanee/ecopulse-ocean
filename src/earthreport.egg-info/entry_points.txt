@@ -1,0 +1,2 @@
+[console_scripts]
+earthreport = earthreport.cli:main
