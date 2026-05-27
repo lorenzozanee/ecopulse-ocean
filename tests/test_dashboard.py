@@ -39,6 +39,6 @@ class TestAPI:
         assert "background" in resp.text
 
     def test_static_js(self):
-        resp = client.get("/static/app.js")
+        resp = client.get("/static/app3d.js")
         assert resp.status_code == 200
         assert "WebSocket" in resp.text

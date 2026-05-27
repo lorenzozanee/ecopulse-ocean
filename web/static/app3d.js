@@ -36,16 +36,17 @@ function drawBg() {
 }
 drawBg();
 
-// === 3D Globe ===
-const TEX = 512, texCanvas = document.createElement('canvas');
-texCanvas.width = TEX; texCanvas.height = TEX / 2;
-const texCtx = texCanvas.getContext('2d');
-let scene, camera, renderer, earth, markers = [], dataTexture, currentLayer = 'sst', globeTime = 0, isReady = false;
+// === 3D Globe with NASA Blue Marble textures + terrain ===
+const OLAY = 1024, olayCanvas = document.createElement('canvas');
+olayCanvas.width = OLAY; olayCanvas.height = OLAY / 2;
+const olayCtx = olayCanvas.getContext('2d');
+let scene, camera, renderer, earth, earthGroup, markers = [], dataOverlay, dataTexture, currentLayer = 'sst', globeTime = 0, isReady = false;
 
 const LAYERS = { sst: { min: 22, max: 32 }, chl: { min: 0.1, max: 4 }, poc: { min: 0.2, max: 8 } };
+const TEXTURE_BASE = 'https://threejs.org/examples/textures/planets/';
 
-function updateTexture(time, layer) {
-  const w = TEX, h = TEX / 2, img = texCtx.createImageData(w, h), cfg = LAYERS[layer];
+function updateOverlay(time, layer) {
+  const w = OLAY, h = OLAY / 2, img = olayCtx.createImageData(w, h), cfg = LAYERS[layer];
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4, nx = (x / w) * 8 - 4, ny = (y / h) * 4 - 2;
@@ -55,10 +56,18 @@ function updateTexture(time, layer) {
       const pocV = 0.5 + 5 * (0.5 + 0.5 * Math.sin(nx * 1.2 + time * 0.25 + 2) * Math.cos(ny * 1.9 - time * 0.35));
       const raw = layer === 'sst' ? sst : layer === 'chl' ? chl * 2 : pocV;
       const t = Math.max(0, Math.min(1, (raw - cfg.min) / (cfg.max - cfg.min + 0.01)));
-      img.data[i] = t * 60 + 10; img.data[i + 1] = t * 90 + 20; img.data[i + 2] = (1 - t) * 90 + 25; img.data[i + 3] = 220;
+      // Color ramp: blue (cold) → cyan → yellow → red (hot)
+      let r, g, b;
+      if (t < 0.25) { const s = t / 0.25; r = 10; g = 30 + s * 80; b = 160 - s * 60; }
+      else if (t < 0.5) { const s = (t - 0.25) / 0.25; r = 10 + s * 60; g = 110 + s * 60; b = 100 - s * 60; }
+      else if (t < 0.75) { const s = (t - 0.5) / 0.25; r = 70 + s * 180; g = 170 - s * 60; b = 40 - s * 30; }
+      else { const s = (t - 0.75) / 0.25; r = 250; g = 110 - s * 60; b = 10; }
+      img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+      // Transparent over oceans (where land would be), semi-transparent everywhere
+      img.data[i + 3] = 120;
     }
   }
-  texCtx.putImageData(img, 0, 0);
+  olayCtx.putImageData(img, 0, 0);
   if (dataTexture) dataTexture.needsUpdate = true;
 }
 
@@ -67,41 +76,128 @@ function init3D() {
   if (!container) return;
   const w = container.clientWidth, h = container.clientHeight;
   scene = new THREE.Scene();
+
   camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 10);
   camera.position.set(0, 0.3, 3.2);
+
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(w, h); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
-  scene.add(new THREE.AmbientLight(0x334466, 1.8));
-  const sun = new THREE.DirectionalLight(0xddeeff, 2.5); sun.position.set(2, 1, 2); scene.add(sun);
+  // Lighting — key light + fill + rim for terrain depth
+  scene.add(new THREE.AmbientLight(0x334466, 1.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+  sun.position.set(5, 2, 3); scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x4488cc, 0.4);
+  fill.position.set(-3, 0, -2); scene.add(fill);
 
-  texCtx.fillStyle = '#0a1628'; texCtx.fillRect(0, 0, TEX, TEX / 2);
-  dataTexture = new THREE.CanvasTexture(texCanvas); updateTexture(0, 'sst');
+  // Starfield
+  const starsGeom = new THREE.BufferGeometry();
+  const starsVerts = [];
+  for (let i = 0; i < 300; i++) {
+    const theta = Math.random() * Math.PI * 2, phi = Math.acos(2 * Math.random() - 1);
+    starsVerts.push(Math.sin(phi) * Math.cos(theta) * 5, Math.sin(phi) * Math.sin(theta) * 5, Math.cos(phi) * 5);
+  }
+  starsGeom.setAttribute('position', new THREE.Float32BufferAttribute(starsVerts, 3));
+  scene.add(new THREE.Points(starsGeom, new THREE.PointsMaterial({ color: 0x8899cc, size: 0.015 })));
 
-  const geom = new THREE.SphereGeometry(1, 64, 48);
-  const mat = new THREE.MeshPhongMaterial({ map: dataTexture, specular: 0x112233, shininess: 5 });
-  earth = new THREE.Mesh(geom, mat); scene.add(earth);
+  // Load NASA Blue Marble textures
+  const loader = new THREE.TextureLoader();
+  const colorMap = loader.load(TEXTURE_BASE + 'earth_atmos_2048.jpg');
+  const specularMap = loader.load(TEXTURE_BASE + 'earth_specular_2048.jpg');
+  const normalMap = loader.load(TEXTURE_BASE + 'earth_normal_2048.jpg');
+  const cloudMap = loader.load(TEXTURE_BASE + 'earth_clouds_1024.png');
 
-  const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.02, 64, 48),
-    new THREE.MeshPhongMaterial({ color: 0x00aadd, transparent: true, opacity: 0.06, side: THREE.FrontSide }));
-  scene.add(atmo);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.01, 0.003, 16, 100),
-    new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.2 }));
-  ring.rotation.x = Math.PI / 2; scene.add(ring);
-
-  const mg = new THREE.SphereGeometry(0.012, 8, 8), mm = new THREE.MeshBasicMaterial({ color: 0x00d4ff });
-  [[15, 115], [18, 112], [10, 118], [8, 108], [20, 117]].forEach(([lat, lon]) => {
-    const phi = (90 - lat) * Math.PI / 180, theta = (lon + 180) * Math.PI / 180, r = 1.01;
-    const mk = new THREE.Mesh(mg, mm); mk.position.set(-r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
-    mk.userData = { lat, lon }; earth.add(mk); markers.push(mk);
+  // Earth with high-res geometry for visible terrain
+  const geom = new THREE.SphereGeometry(1, 128, 96);
+  const mat = new THREE.MeshPhongMaterial({
+    map: colorMap,
+    specularMap: specularMap,
+    specular: new THREE.Color(0x333333),
+    shininess: 25,
+    normalMap: normalMap,
+    normalScale: new THREE.Vector2(1.2, 1.2),
   });
+  earth = new THREE.Mesh(geom, mat);
 
+  earthGroup = new THREE.Group();
+  earthGroup.add(earth);
+  scene.add(earthGroup);
+
+  // Data overlay — semi-transparent sphere showing ocean metrics
+  olayCtx.fillStyle = 'rgba(0,0,0,0)';
+  olayCtx.fillRect(0, 0, OLAY, OLAY / 2);
+  dataTexture = new THREE.CanvasTexture(olayCanvas);
+  updateOverlay(0, 'sst');
+
+  const overlayGeom = new THREE.SphereGeometry(1.005, 128, 96);
+  const overlayMat = new THREE.MeshBasicMaterial({
+    map: dataTexture,
+    transparent: true,
+    opacity: 0.45,
+    blending: THREE.AdditiveBlending,
+  });
+  dataOverlay = new THREE.Mesh(overlayGeom, overlayMat);
+  earthGroup.add(dataOverlay);
+
+  // Clouds layer
+  const cloudGeom = new THREE.SphereGeometry(1.015, 64, 48);
+  const cloudMat = new THREE.MeshPhongMaterial({
+    map: cloudMap,
+    transparent: true,
+    opacity: 0.25,
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide,
+  });
+  const clouds = new THREE.Mesh(cloudGeom, cloudMat);
+  earthGroup.add(clouds);
+
+  // Atmosphere glow
+  const atmoGeom = new THREE.SphereGeometry(1.03, 64, 48);
+  const atmoMat = new THREE.ShaderMaterial({
+    vertexShader: `
+      varying vec3 vNormal; varying vec3 vPosition;
+      void main() { vNormal = normalize(normalMatrix * normal); vec4 p = modelViewMatrix * vec4(position, 1.0); vPosition = p.xyz; gl_Position = projectionMatrix * p; }
+    `,
+    fragmentShader: `
+      varying vec3 vNormal; varying vec3 vPosition;
+      void main() { float intensity = pow(0.7 - dot(vNormal, vec3(0, 0, 1.0)), 3.0); gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity; }
+    `,
+    blending: THREE.AdditiveBlending,
+    side: THREE.FrontSide,
+    transparent: true,
+    depthWrite: false,
+  });
+  scene.add(new THREE.Mesh(atmoGeom, atmoMat));
+
+  // ARGO float markers
+  const mg = new THREE.SphereGeometry(0.01, 12, 12);
+  const mm = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+  const positions = [[15,115],[18,112],[10,118],[8,108],[20,117],[-35,-55],[40,-50],[-5,-85]];
+  for (const [lat,lon] of positions) {
+    const phi = (90-lat)*Math.PI/180, theta = (lon+180)*Math.PI/180, rd = 1.015;
+    const mk = new THREE.Mesh(mg, mm);
+    mk.position.set(-rd*Math.sin(phi)*Math.cos(theta), rd*Math.cos(phi), rd*Math.sin(phi)*Math.sin(theta));
+    mk.userData = {lat,lon}; earthGroup.add(mk); markers.push(mk);
+  }
+
+  // Interaction
   let dragging = false, px = 0, py = 0;
   renderer.domElement.addEventListener('pointerdown', e => { dragging = true; px = e.clientX; py = e.clientY; });
-  window.addEventListener('pointermove', e => { if (!dragging) return; earth.rotation.y += (e.clientX - px) * 0.005; earth.rotation.x += (e.clientY - py) * 0.003; earth.rotation.x = Math.max(-0.5, Math.min(0.5, earth.rotation.x)); px = e.clientX; py = e.clientY; });
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    earthGroup.rotation.y += (e.clientX - px) * 0.005;
+    earthGroup.rotation.x += (e.clientY - py) * 0.003;
+    earthGroup.rotation.x = Math.max(-0.5, Math.min(0.5, earthGroup.rotation.x));
+    px = e.clientX; py = e.clientY;
+  });
   window.addEventListener('pointerup', () => { dragging = false; });
-  renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); camera.position.z += e.deltaY * 0.002; camera.position.z = Math.max(1.8, Math.min(5, camera.position.z)); }, { passive: false });
+  renderer.domElement.addEventListener('wheel', e => {
+    e.preventDefault();
+    camera.position.z += e.deltaY * 0.002;
+    camera.position.z = Math.max(1.8, Math.min(5, camera.position.z));
+  }, { passive: false });
 
   window.addEventListener('resize', () => {
     const cw = container.clientWidth, ch = container.clientHeight;
@@ -113,15 +209,14 @@ function init3D() {
 function animate3D() {
   if (!isReady) return;
   requestAnimationFrame(animate3D);
-  earth.rotation.y += 0.0015; globeTime += 0.02;
-  for (const m of markers) m.scale.setScalar(1 + 0.3 * Math.sin(globeTime * 4 + m.userData.lat));
-  if (Math.floor(globeTime * 60) % 60 === 0) updateTexture(globeTime, currentLayer);
+  earthGroup.rotation.y += 0.0018; globeTime += 0.02;
+  for (const m of markers) m.scale.setScalar(1 + 0.35 * Math.sin(globeTime * 4 + m.userData.lat));
+  if (Math.floor(globeTime * 60) % 60 === 0) updateOverlay(globeTime, currentLayer);
   renderer.render(scene, camera);
 }
 
-function setLayer(layer) { if (LAYERS[layer]) { currentLayer = layer; updateTexture(globeTime, layer); } }
+function setLayer(layer) { if (LAYERS[layer]) { currentLayer = layer; updateOverlay(globeTime, layer); } }
 
-// Initialize if WebGL available, otherwise fallback to 2D canvas
 if ((() => { try { return !!document.createElement('canvas').getContext('webgl'); } catch (_) { return false; } })()) {
   init3D(); animate3D();
 } else {
