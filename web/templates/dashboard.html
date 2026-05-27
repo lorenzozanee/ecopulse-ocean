@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earth Dynamic Report / 地球动态报告</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<canvas id="globe-bg"></canvas>
+<div id="app">
+  <header>
+    <h1>EARTH DYNAMIC REPORT / 地球动态报告</h1>
+    <span class="live-badge"><span class="dot"></span> LIVE — Copernicus · ARGO · Sentinel-3</span>
+  </header>
+
+  <div class="panel" id="left-panel">
+    <h3>Observation Regions</h3>
+    <button class="region-btn active" data-region="scs">South China Sea — Carbon Sink</button>
+    <button class="region-btn" data-region="na">North Atlantic — Deep Water</button>
+    <button class="region-btn" data-region="so">Southern Ocean — Bio Pump</button>
+    <button class="region-btn" data-region="ep">East Pacific — Upwelling</button>
+    <button class="region-btn" data-region="io">North Indian — Monsoon Flux</button>
+
+    <h3 style="margin-top:4px;">Edge Sensor Fleet</h3>
+    <div class="report-card"><h4>ESP32-S3 #01 <span style="color:#4caf50">●</span></h4><p>RLC: 0.42mV | SNR: 17.3dB | 12mW</p></div>
+    <div class="report-card"><h4>ESP32-S3 #02 <span style="color:#ff9100">●</span></h4><p>RLC: 0.08mV | Gain: +14dB | 8mW</p></div>
+    <div class="report-card"><h4>RPi-Zero #03 <span style="color:#4caf50">●</span></h4><p>pH: 8.12 | DO: 6.4mg/L | 35mW</p></div>
+  </div>
+
+  <div class="panel" id="center-panel">
+    <h3 id="viewport-title">Digital Twin — South China Sea</h3>
+    <div id="map-container"><canvas id="map-canvas"></canvas></div>
+    <div id="metrics-row">
+      <div class="metric-card"><div class="value" style="color:var(--accent)" id="m-sst">--°C</div><div class="label">SST</div></div>
+      <div class="metric-card"><div class="value" style="color:#66bb6a" id="m-chl">-- mg/m³</div><div class="label">Chl-a</div></div>
+      <div class="metric-card"><div class="value" style="color:#ffb74d" id="m-poc">-- gC/m²</div><div class="label">POC Flux</div></div>
+      <div class="metric-card"><div class="value" style="color:#ce93d8" id="m-mld">--m</div><div class="label">MLD</div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="right-panel">
+    <h3>AI Health Assessment</h3>
+    <div id="report-sections"><div class="report-card"><p>Connecting to server...</p></div></div>
+    <h3 style="margin-top:4px;">Data Relay Log</h3>
+    <div id="relay-log"></div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

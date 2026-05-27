@@ -89,9 +89,17 @@ def main() -> None:
                         help="LLM provider (default: mock)")
     parser.add_argument("--output", default="reports",
                         help="Output directory (default: reports)")
+    parser.add_argument("--serve", action="store_true",
+                        help="Start FastAPI web server instead of CLI report")
     args = parser.parse_args()
-    run_pipeline(region_key=args.region, seed=args.seed,
-                 source=args.source, llm_provider=args.llm, output_dir=args.output)
+
+    if args.serve:
+        import uvicorn
+        print("Starting Earth Dynamic Report server at http://localhost:8000")
+        uvicorn.run("web.server:app", host="0.0.0.0", port=8000, reload=True)
+    else:
+        run_pipeline(region_key=args.region, seed=args.seed,
+                     source=args.source, llm_provider=args.llm, output_dir=args.output)
 
 
 if __name__ == "__main__":
