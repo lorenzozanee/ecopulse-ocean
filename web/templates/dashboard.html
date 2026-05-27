@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Earth Dynamic Report / 地球动态报告</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>.layer-btn{background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:#556677;font-family:inherit;font-size:0.55rem;cursor:pointer;padding:1px 5px}.layer-btn.active{border-color:#00d4ff;color:#00d4ff;background:rgba(0,212,255,0.08)}</style>
 </head>
 <body>
 <canvas id="globe-bg"></canvas>
@@ -29,8 +30,14 @@
   </div>
 
   <div class="panel" id="center-panel">
-    <h3 id="viewport-title">Digital Twin — South China Sea</h3>
-    <div id="map-container"><canvas id="map-canvas"></canvas></div>
+    <h3 id="viewport-title">Digital Twin — South China Sea
+      <span style="float:right;font-weight:400;">
+        Layer <button class="layer-btn active" data-layer="sst">SST</button>
+        <button class="layer-btn" data-layer="chl">Chl-a</button>
+        <button class="layer-btn" data-layer="poc">POC</button>
+      </span>
+    </h3>
+    <div id="map-container"><canvas id="map-canvas" style="display:none"></canvas></div>
     <div id="metrics-row">
       <div class="metric-card"><div class="value" style="color:var(--accent)" id="m-sst">--°C</div><div class="label">SST</div></div>
       <div class="metric-card"><div class="value" style="color:#66bb6a" id="m-chl">-- mg/m³</div><div class="label">Chl-a</div></div>
@@ -46,6 +53,9 @@
     <div id="relay-log"></div>
   </div>
 </div>
-<script src="/static/app.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module" src="/static/app3d.js"></script>
 </body>
 </html>
